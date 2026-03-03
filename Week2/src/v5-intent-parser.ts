@@ -4,6 +4,7 @@
  */
 
 import Anthropic from "@anthropic-ai/sdk";
+import { EmitterFactory } from "../../Week3/emitters/index";
 
 /**
  * Intent 인터페이스
@@ -61,13 +62,18 @@ export interface ValidationResult {
  * V5 Intent Parser 클래스
  */
 export class V5IntentParser {
-  private client: Anthropic;
+  private client: any; // Anthropic SDK 타입 호환성 문제
   private model: string = "claude-opus-4-6";
 
   constructor(apiKey?: string) {
-    this.client = new Anthropic({
-      apiKey: apiKey || process.env.ANTHROPIC_API_KEY,
-    });
+    try {
+      this.client = new (Anthropic as any)({
+        apiKey: apiKey || process.env.ANTHROPIC_API_KEY,
+      });
+    } catch (e) {
+      console.error("Failed to initialize Anthropic client:", e);
+      throw e;
+    }
   }
 
   /**
@@ -201,35 +207,28 @@ JSON만 응답하세요 (마크다운 없음).
   }
 
   /**
-   * 4️⃣ Intent → v4 → 코드 생성 (초기 구현)
+   * 4️⃣ Intent → v4 → 코드 생성 (Week 3 Emitter 통합)
    */
   async generateCode(
     spec: V4Spec,
     language: "ts" | "c" | "py" | "go" | "rs"
   ): Promise<string> {
-    const prompt = `
-FreeLang v4 형식을 ${this.getLanguageName(language)} 코드로 변환하세요.
+    try {
+      // Week 3 Emitter를 사용하여 v4 → 언어별 코드 생성
+      const emitter = EmitterFactory.create(language);
+      const code = emitter.emit(spec);
 
-v4 Spec:
-${JSON.stringify(spec, null, 2)}
+      // 코드 유효성 검사
+      if (!emitter.validate(code)) {
+        throw new Error("생성된 코드 유효성 검사 실패");
+      }
 
-${this.getLanguageGuide(language)}
-
-생성된 코드를 반환하세요.
-`;
-
-    const message = await this.client.messages.create({
-      model: this.model,
-      max_tokens: 2048,
-      messages: [
-        {
-          role: "user",
-          content: prompt,
-        },
-      ],
-    });
-
-    return message.content[0].type === "text" ? message.content[0].text : "";
+      // 포매팅
+      return emitter.format(code);
+    } catch (error) {
+      console.error(`Code generation failed for ${language}:`, error);
+      throw new Error(`Failed to generate ${language} code: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   /**
