@@ -17,6 +17,7 @@ import { generateCommand } from "./commands/generate";
 import { optimizeCommand } from "./commands/optimize";
 import { validateCommand } from "./commands/validate";
 import { runCommand } from "./commands/run";
+import { execCommand } from "./commands/exec";
 
 const VERSION = "5.0.0-alpha";
 
@@ -66,6 +67,10 @@ async function main() {
         await runCommand(args.slice(1));
         break;
 
+      case "exec":
+        await execCommand(args.slice(1));
+        break;
+
       // Direct intent (no explicit 'generate' command)
       default:
         // Treat as intent if it starts with a quote or doesn't match a command
@@ -106,6 +111,7 @@ function showHelp(): void {
   Explicit Commands:
     freelang generate "당신의 의도"      (코드 생성)
     freelang run "당신의 의도"           (코드 생성 후 바로 실행)
+    freelang exec <파일경로>             (v5 파일 직접 실행 - 네이티브 인터프리터)
     freelang optimize <파일경로>        (최적화)
     freelang validate <파일경로>        (보안 검증)
 

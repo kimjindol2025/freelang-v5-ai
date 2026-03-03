@@ -1,0 +1,11 @@
+fn add(a: number, b: number) -> number {
+  return a + b;
+}
+
+fn multiply(a: number, b: number) -> number {
+  return a * b;
+}
+
+fn greet(name: string) -> string {
+  return `Hello, ${name}!`;
+}

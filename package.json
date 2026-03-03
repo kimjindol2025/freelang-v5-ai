@@ -17,6 +17,7 @@
     "cli": "ts-node src/cli/cli.ts",
     "cli:generate": "npm run cli -- generate",
     "cli:run": "npm run cli -- run",
+    "cli:exec": "npm run cli -- exec",
     "cli:optimize": "npm run cli -- optimize",
     "cli:validate": "npm run cli -- validate",
     "generate:intent": "ts-node scripts/generate-from-intent.ts",
