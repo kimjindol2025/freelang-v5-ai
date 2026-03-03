@@ -4,6 +4,9 @@
   "description": "FreeLang v5 AI-First Language - Intent-Based Programming (Human 10% + AI 90%)",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "bin": {
+    "freelang": "dist/cli/cli.js"
+  },
   "scripts": {
     "build": "tsc",
     "test": "npm run test:week1 && npm run test:week2 && npm run test:week3 && npm run test:week4",
@@ -11,6 +14,10 @@
     "test:week2": "ts-node Week2/week2-integration-test.ts",
     "test:week3": "ts-node Week3/week3-codegen-test.ts",
     "test:week4": "ts-node Week4/week4-optimization-test.ts",
+    "cli": "ts-node src/cli/cli.ts",
+    "cli:generate": "npm run cli -- generate",
+    "cli:optimize": "npm run cli -- optimize",
+    "cli:validate": "npm run cli -- validate",
     "generate:intent": "ts-node scripts/generate-from-intent.ts",
     "generate:typescript": "ts-node scripts/generate-typescript.ts",
     "generate:c": "ts-node scripts/generate-c.ts",

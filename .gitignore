@@ -33,3 +33,4 @@ coverage/
 # OS
 Thumbs.db
 .DS_Store
+freelang-generated/
