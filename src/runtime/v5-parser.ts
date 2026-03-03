@@ -16,6 +16,16 @@ import { V4Spec, Declaration } from "../../Week2/src/v5-intent-parser";
 enum TokenType {
   FN = "FN",
   VAR = "VAR",
+  CLASS = "CLASS",
+  NEW = "NEW",
+  ASYNC = "ASYNC",
+  AWAIT = "AWAIT",
+  IMPORT = "IMPORT",
+  EXPORT = "EXPORT",
+  FROM = "FROM",
+  AS = "AS",
+  WHILE = "WHILE",
+  FOR = "FOR",
   ARROW = "ARROW",
   LPAREN = "LPAREN",
   RPAREN = "RPAREN",
@@ -26,6 +36,8 @@ enum TokenType {
   COMMA = "COMMA",
   COLON = "COLON",
   EQUALS = "EQUALS",
+  DOT = "DOT",
+  STAR = "STAR",
   IDENTIFIER = "IDENTIFIER",
   STRING = "STRING",
   NUMBER = "NUMBER",
@@ -59,6 +71,12 @@ export class V5Parser {
       const decl = this.parseDeclaration();
       if (decl) {
         declarations.push(decl);
+      } else {
+        // parseDeclaration()이 null을 반환하면 현재 토큰 건너뛰기
+        // (무한 루프 방지)
+        if (!this.isAtEnd()) {
+          this.advance();
+        }
       }
     }
 
@@ -151,6 +169,17 @@ export class V5Parser {
         let type = TokenType.IDENTIFIER;
         if (ident === "fn") type = TokenType.FN;
         else if (ident === "var") type = TokenType.VAR;
+        else if (ident === "class") type = TokenType.CLASS;
+        else if (ident === "new") type = TokenType.NEW;
+        else if (ident === "async") type = TokenType.ASYNC;
+        else if (ident === "await") type = TokenType.AWAIT;
+        else if (ident === "import") type = TokenType.IMPORT;
+        else if (ident === "export") type = TokenType.EXPORT;
+        else if (ident === "from") type = TokenType.FROM;
+        else if (ident === "as") type = TokenType.AS;
+        else if (ident === "while") type = TokenType.WHILE;
+        else if (ident === "for") type = TokenType.FOR;
+        else if (ident === "this") type = TokenType.IDENTIFIER; // "this"는 특수 식별자로 처리
 
         tokens.push({
           type,
@@ -215,8 +244,9 @@ export class V5Parser {
       else if (char === ",") type = TokenType.COMMA;
       else if (char === ";") type = TokenType.COMMA;  // semicolon 무시 (연산자로 처리)
       else if (char === ":") type = TokenType.COLON;
+      else if (char === ".") type = TokenType.DOT;
       else if (char === "+") type = TokenType.COMMA;  // 임시: 토큰으로 생성 (value에 저장)
-      else if (char === "*") type = TokenType.COMMA;
+      else if (char === "*") type = TokenType.STAR;   // "*" 는 STAR 토큰으로 처리
       else if (char === "/") type = TokenType.COMMA;
       else if (char === "%") type = TokenType.COMMA;
       else if (char === "<") type = TokenType.COMMA;
@@ -256,11 +286,39 @@ export class V5Parser {
     if (this.isAtEnd()) return null;
 
     const token = this.peek();
+    let isAsync = false;
 
-    if (token.type === TokenType.FN) {
-      return this.parseFunctionDeclaration();
-    } else if (token.type === TokenType.VAR) {
+    // async 키워드 감지
+    if (token.type === TokenType.ASYNC) {
+      this.advance(); // async 소비
+      if (this.peek().type === TokenType.FN) {
+        isAsync = true;
+      } else {
+        // async 뒤에 fn이 아니면 에러
+        throw new Error(`async 뒤에 fn이 필요합니다 (받음: ${this.peek().value})`);
+      }
+    }
+
+    const currentToken = this.peek();
+
+    if (currentToken.type === TokenType.FN) {
+      const decl = this.parseFunctionDeclaration();
+      if (isAsync) {
+        if (decl.properties) {
+          decl.properties["is_async"] = true;
+        } else {
+          decl.properties = { is_async: true };
+        }
+      }
+      return decl;
+    } else if (currentToken.type === TokenType.VAR) {
       return this.parseVariableDeclaration();
+    } else if (currentToken.type === TokenType.CLASS) {
+      return this.parseClassDeclaration();
+    } else if (currentToken.type === TokenType.IMPORT) {
+      return this.parseImportStatement();
+    } else if (currentToken.type === TokenType.EXPORT) {
+      return this.parseExportStatement();
     }
 
     return null;
@@ -351,6 +409,278 @@ export class V5Parser {
       type: "var_declaration",
       name,
       value: value.trim(),
+    };
+  }
+
+  /**
+   * 클래스 선언 파싱
+   * class Dog { var name; fn init(...) { ... } fn speak() { ... } }
+   */
+  private parseClassDeclaration(): Declaration {
+    this.consume(TokenType.CLASS); // class
+    const className = this.consume(TokenType.IDENTIFIER).value;
+    this.consume(TokenType.LBRACE); // {
+
+    const fields: string[] = [];
+    const methods: Declaration[] = [];
+
+    while (this.peek().type !== TokenType.RBRACE && !this.isAtEnd()) {
+      if (this.peek().type === TokenType.VAR) {
+        // var fieldName: type;
+        this.consume(TokenType.VAR);
+        const fieldName = this.consume(TokenType.IDENTIFIER).value;
+        // ':' 와 type 건너뛰기
+        if (this.peek().type === TokenType.COLON) {
+          this.consume(TokenType.COLON);
+          this.consume(TokenType.IDENTIFIER); // type 버림
+        }
+        // ';' 건너뛰기 (COMMA 토큰으로 처리됨)
+        if (this.peek().type === TokenType.COMMA) {
+          this.consume(TokenType.COMMA);
+        }
+        fields.push(fieldName);
+      } else if (this.peek().type === TokenType.FN) {
+        // fn method(...) { ... }
+        methods.push(this.parseFunctionDeclaration());
+      } else {
+        // 알 수 없는 토큰 건너뛰기
+        this.advance();
+      }
+    }
+
+    this.consume(TokenType.RBRACE); // }
+
+    return {
+      type: "class_declaration",
+      name: className,
+      properties: {
+        fields,
+        methods,
+      },
+    };
+  }
+
+  /**
+   * import 문 파싱
+   * import { name1, name2 } from "./module.v5"
+   * import * as moduleName from "./module.v5"
+   */
+  private parseImportStatement(): Declaration {
+    this.consume(TokenType.IMPORT);
+
+    const specifiers: { name: string; alias?: string }[] = [];
+    let namespace: string | undefined;
+
+    // import * as name 형식
+    if (this.peek().type === TokenType.STAR) {
+      this.consume(TokenType.STAR);
+      this.consume(TokenType.AS);
+      namespace = this.consume(TokenType.IDENTIFIER).value;
+    }
+    // import { name1, name2, ... } 형식
+    else if (this.peek().type === TokenType.LBRACE) {
+      this.consume(TokenType.LBRACE);
+
+      while (this.peek().type !== TokenType.RBRACE && !this.isAtEnd()) {
+        const name = this.consume(TokenType.IDENTIFIER).value;
+        let alias: string | undefined;
+
+        // as로 별칭 제공
+        if (this.peek().type === TokenType.AS) {
+          this.consume(TokenType.AS);
+          alias = this.consume(TokenType.IDENTIFIER).value;
+        }
+
+        specifiers.push({ name, alias });
+
+        // 다음 항목이 있으면 쉼표 필요
+        if (this.peek().type === TokenType.COMMA) {
+          this.consume(TokenType.COMMA);
+        }
+      }
+
+      this.consume(TokenType.RBRACE);
+    }
+
+    // from 키워드와 모듈 경로
+    this.consume(TokenType.FROM);
+    const fromPath = this.consume(TokenType.STRING).value;
+
+    return {
+      type: "import_statement",
+      properties: {
+        specifiers,
+        from: fromPath,
+        namespace,
+      },
+    };
+  }
+
+  /**
+   * export 문 파싱
+   * export fn name(...) { ... }
+   * export var name = value
+   * export class Name { ... }
+   */
+  private parseExportStatement(): Declaration {
+    this.consume(TokenType.EXPORT);
+
+    let decl: Declaration | null = null;
+
+    if (this.peek().type === TokenType.FN) {
+      decl = this.parseFunctionDeclaration();
+    } else if (this.peek().type === TokenType.VAR) {
+      decl = this.parseVariableDeclaration();
+    } else if (this.peek().type === TokenType.CLASS) {
+      decl = this.parseClassDeclaration();
+    } else {
+      throw new Error(`export 뒤에 fn/var/class가 필요합니다 (받음: ${this.peek().value})`);
+    }
+
+    // is_exported 플래그 설정
+    if (decl) {
+      if (!decl.properties) {
+        decl.properties = {};
+      }
+      decl.properties["is_exported"] = true;
+    }
+
+    return decl;
+  }
+
+  /**
+   * while 문 파싱
+   * while (condition) { body }
+   */
+  private parseWhileStatement(): Declaration {
+    this.consume(TokenType.WHILE); // while
+    this.consume(TokenType.LPAREN); // (
+
+    // 조건 파싱
+    let condition = "";
+    let parenDepth = 1;
+    while (parenDepth > 0 && !this.isAtEnd()) {
+      const token = this.peek();
+      if (token.type === TokenType.LPAREN) {
+        parenDepth++;
+        condition += token.value + " ";
+      } else if (token.type === TokenType.RPAREN) {
+        parenDepth--;
+        if (parenDepth > 0) {
+          condition += token.value + " ";
+        }
+      } else {
+        condition += token.value + " ";
+      }
+      this.advance();
+    }
+
+    // 공백 건너뛰기
+    while (this.peek().type === TokenType.COMMA || /\s/.test(this.peek().value)) {
+      if (this.peek().type === TokenType.LBRACE) break;
+      this.advance();
+    }
+
+    this.consume(TokenType.LBRACE); // {
+
+    // 본문 파싱
+    let logic = "";
+    let braceDepth = 1;
+    while (braceDepth > 0 && !this.isAtEnd()) {
+      const token = this.peek();
+      if (token.type === TokenType.LBRACE) {
+        braceDepth++;
+        logic += token.value + " ";
+      } else if (token.type === TokenType.RBRACE) {
+        braceDepth--;
+        if (braceDepth > 0) {
+          logic += token.value + " ";
+        }
+      } else {
+        logic += token.value + " ";
+      }
+      this.advance();
+    }
+
+    return {
+      type: "while_statement",
+      properties: {
+        condition: condition.trim(),
+        logic: logic.trim(),
+      },
+    };
+  }
+
+  /**
+   * for 문 파싱
+   * for (init; condition; update) { body }
+   */
+  private parseForStatement(): Declaration {
+    this.consume(TokenType.FOR); // for
+    this.consume(TokenType.LPAREN); // (
+
+    // for 헤더 파싱 (init; condition; update)
+    let headerParts: string[] = ["", "", ""];
+    let partIdx = 0;
+    let parenDepth = 1;
+
+    while (parenDepth > 0 && !this.isAtEnd()) {
+      const token = this.peek();
+      if (token.type === TokenType.LPAREN) {
+        parenDepth++;
+        headerParts[partIdx] += token.value + " ";
+      } else if (token.type === TokenType.RPAREN) {
+        parenDepth--;
+        if (parenDepth > 0) {
+          headerParts[partIdx] += token.value + " ";
+        }
+      } else if (token.type === TokenType.COMMA && token.value === ";" && parenDepth === 1) {
+        // 세미콜론으로 분리
+        partIdx++;
+        if (partIdx >= 3) break;
+      } else {
+        headerParts[partIdx] += token.value + " ";
+      }
+      this.advance();
+    }
+
+    const [initPart, condPart, updatePart] = headerParts.map((s) => s.trim());
+
+    // 공백 건너뛰기
+    while (this.peek().type === TokenType.COMMA || /\s/.test(this.peek().value)) {
+      if (this.peek().type === TokenType.LBRACE) break;
+      this.advance();
+    }
+
+    this.consume(TokenType.LBRACE); // {
+
+    // 본문 파싱
+    let logic = "";
+    let braceDepth = 1;
+    while (braceDepth > 0 && !this.isAtEnd()) {
+      const token = this.peek();
+      if (token.type === TokenType.LBRACE) {
+        braceDepth++;
+        logic += token.value + " ";
+      } else if (token.type === TokenType.RBRACE) {
+        braceDepth--;
+        if (braceDepth > 0) {
+          logic += token.value + " ";
+        }
+      } else {
+        logic += token.value + " ";
+      }
+      this.advance();
+    }
+
+    return {
+      type: "for_statement",
+      properties: {
+        init: initPart,
+        condition: condPart,
+        update: updatePart,
+        logic: logic.trim(),
+      },
     };
   }
 

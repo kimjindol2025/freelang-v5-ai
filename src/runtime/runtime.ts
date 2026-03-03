@@ -10,10 +10,53 @@ import { V4Spec } from "../../Week2/src/v5-intent-parser";
 export class FreeLangRuntime {
   private parser: V5Parser;
   private interpreter: V4Interpreter;
+  private moduleCache: Map<string, any> = new Map();
 
   constructor() {
     this.parser = new V5Parser();
     this.interpreter = new V4Interpreter();
+
+    // 모듈 로더 설정
+    this.interpreter.setModuleLoader((path: string) => this.loadModule(path));
+  }
+
+  /**
+   * 모듈 로드
+   */
+  private loadModule(path: string): Record<string, any> {
+    // 캐시 확인
+    if (this.moduleCache.has(path)) {
+      return this.moduleCache.get(path);
+    }
+
+    try {
+      const fs = require("fs");
+
+      // 파일 읽기
+      if (!fs.existsSync(path)) {
+        throw new Error(`파일을 찾을 수 없습니다: ${path}`);
+      }
+
+      const code = fs.readFileSync(path, "utf-8");
+
+      // 모듈 파싱 및 실행
+      const spec = this.parser.parse(code);
+      this.interpreter.execute(spec);
+
+      // 내보낸 함수들 수집
+      const exportedFunctions = this.interpreter.getExportedFunctions();
+      const moduleExports: Record<string, any> = {};
+
+      exportedFunctions.forEach((fn: any, name: string) => {
+        moduleExports[name] = fn;
+      });
+
+      // 캐시에 저장
+      this.moduleCache.set(path, moduleExports);
+      return moduleExports;
+    } catch (error) {
+      throw new Error(`모듈 로드 실패 (${path}): ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   /**
