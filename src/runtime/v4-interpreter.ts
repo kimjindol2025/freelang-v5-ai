@@ -139,22 +139,13 @@ export class V4Interpreter {
       params.forEach((param: any, idx: number) => {
         const paramName = typeof param === "string" ? param : param.name;
         const paramValue = args[idx];
-        if (name === "fib") {
-          console.log(`[PARAM] ${name}: ${paramName} = ${paramValue}`);
-        }
         this.context.variables.set(paramName, paramValue);
       });
 
       // 함수 로직 실행
       let result: any;
       try {
-        if (name === "main") {
-          console.log(`🔧 main() 실행: logic = "${logic.substring(0, 50)}..."`);
-        }
         result = this.executeLogic(logic, args);
-        if (name === "main") {
-          console.log(`✅ main() 결과: ${result}`);
-        }
       } catch (e) {
         // 에러 처리
         console.error(`❌ ${name}() 에러:`, (e as Error).message);
@@ -343,12 +334,48 @@ export class V4Interpreter {
   }
 
   /**
+   * 괄호를 고려한 이항 연산 분할
+   * 예: "n * factorial(n - 1)" → { left: "n", op: "*", right: "factorial(n - 1)" }
+   * "(" 안의 연산자는 무시함
+   */
+  private findBinaryOperator(
+    expr: string,
+    operators: string[]
+  ): { left: string; op: string; right: string } | null {
+    for (const opStr of operators) {
+      // 괄호 깊이를 추적하면서 연산자 찾기
+      let depth = 0;
+      let opPos = -1;
+
+      for (let i = expr.length - 1; i >= 0; i--) {
+        const char = expr[i];
+
+        if (char === ")" || char === "]" || char === "}") {
+          depth++;
+        } else if (char === "(" || char === "[" || char === "{") {
+          depth--;
+        } else if (depth === 0 && expr.substring(i, i + opStr.length) === opStr) {
+          opPos = i;
+          break; // 가장 오른쪽 (낮은 우선순위) 연산자 찾기
+        }
+      }
+
+      if (opPos >= 0) {
+        const left = expr.substring(0, opPos).trim();
+        const right = expr.substring(opPos + opStr.length).trim();
+        return { left, op: opStr, right };
+      }
+    }
+    return null;
+  }
+
+  /**
    * 괄호 균형을 맞춰서 함수 호출 감지
    * 예: "fib(n-1)" → {funcName: "fib", argsStr: "n-1", isSimpleCall: true}
    * 예: "fib(n-1) + fib(n-2)" → null (단순 함수 호출이 아님)
    */
   private extractSimpleFunctionCall(str: string): { funcName: string; argsStr: string } | null {
-    const match = str.match(/^(\w+)\(/);
+    const match = str.match(/^(\w+)\s*\(/);  // 함수명과 ( 사이 공백 허용
     if (!match) return null;
 
     const funcName = match[1];
@@ -454,24 +481,12 @@ export class V4Interpreter {
 
       if (fn) {
         // bracket-aware argument split
-        if (funcName === "fib") {
-          console.log(`[ARGS] argsStr="${argsStr}"`);
-        }
         const splitArgs = argsStr ? this.splitArguments(argsStr) : [];
-        if (funcName === "fib") {
-          console.log(`[SPLIT] ${splitArgs.map(s => `"${s}"`).join(", ")}`);
-        }
         const callArgs = splitArgs.map((arg) => {
           const trimmed = arg.trim();
           const evaluated = this.evaluateExpression(trimmed, args);
-          if (funcName === "fib") {
-            console.log(`  [EVAL] "${trimmed}" → ${evaluated}`);
-          }
           return evaluated;
         });
-        if (funcName === "fib") {
-          console.log(`[CALL] ${funcName}(${callArgs.join(", ")})`);
-        }
         return fn(...callArgs);
       }
     }
@@ -495,43 +510,46 @@ export class V4Interpreter {
       return left || right;
     }
 
-    // 산술 & 비교 연산자 - 순서대로 시도
-    const operators = ["<=", ">=", "==", "!=", "<", ">", "%", "+", "-", "*", "/"];
-    for (const opStr of operators) {
-      const escapedOp = opStr.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      const regex1 = new RegExp(`^(.+?)\\s*${escapedOp}\\s*(.+)$`);
-      const regex2 = new RegExp(`^(.+?)${escapedOp}(.+)$`);
+    // 산술 & 비교 연산자 - 우선순위 낮은 것부터 검색
+    // 낮은 우선순위부터 분할하면 자동으로 높은 우선순위가 먼저 계산됨
+    const operators = [
+      // 비교 (낮음)
+      "<=", ">=", "==", "!=", "<", ">",
+      // 덧셈/뺄셈
+      "+", "-",
+      // 곱셈/나눗셈/나머지 (높음)
+      "%", "*", "/"
+    ];
 
-      binaryMatch = trimmed.match(regex1) || trimmed.match(regex2);
-      if (binaryMatch) {
-        const left = this.evaluateExpression(binaryMatch[1], args);
-        const op = opStr;
-        const right = this.evaluateExpression(binaryMatch[2], args);
+    const binaryOp = this.findBinaryOperator(trimmed, operators);
+    if (binaryOp) {
+      const left = this.evaluateExpression(binaryOp.left, args);
+      const right = this.evaluateExpression(binaryOp.right, args);
 
-        switch (op) {
-          case "+":
-            return left + right;
-          case "-":
-            return left - right;
-          case "*":
-            return left * right;
-          case "/":
-            return left / right;
-          case "%":
-            return left % right;
-          case "<":
-            return left < right;
-          case ">":
-            return left > right;
-          case "<=":
-            return left <= right;
-          case ">=":
-            return left >= right;
-          case "==":
-            return left == right;
-          case "!=":
-            return left != right;
-        }
+      const op = binaryOp.op;
+      switch (op) {
+        case "+":
+          return left + right;
+        case "-":
+          return left - right;
+        case "*":
+          return left * right;
+        case "/":
+          return left / right;
+        case "%":
+          return left % right;
+        case "<":
+          return left < right;
+        case ">":
+          return left > right;
+        case "<=":
+          return left <= right;
+        case ">=":
+          return left >= right;
+        case "==":
+          return left == right;
+        case "!=":
+          return left != right;
       }
     }
 
