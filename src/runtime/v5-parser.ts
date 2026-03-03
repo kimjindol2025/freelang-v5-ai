@@ -162,20 +162,35 @@ export class V5Parser {
         continue;
       }
 
-      // 연산자 및 구분자
+      // 연산자 및 구분자 (더 구체적인 패턴을 먼저 검사!)
       let type: TokenType | null = null;
       let value = char;
 
-      if (char === "(") type = TokenType.LPAREN;
-      else if (char === ")") type = TokenType.RPAREN;
-      else if (char === "{") type = TokenType.LBRACE;
-      else if (char === "}") type = TokenType.RBRACE;
-      else if (char === "[") type = TokenType.LBRACKET;
-      else if (char === "]") type = TokenType.RBRACKET;
-      else if (char === ",") type = TokenType.COMMA;
-      else if (char === ":") type = TokenType.COLON;
-      else if (char === "=" && code[i + 1] !== ">") {
-        type = TokenType.EQUALS;
+      // 2문자 연산자 먼저 검사
+      if (char === "&" && code[i + 1] === "&") {
+        type = TokenType.COMMA;
+        value = "&&";
+        i++;
+      } else if (char === "|" && code[i + 1] === "|") {
+        type = TokenType.COMMA;
+        value = "||";
+        i++;
+      } else if (char === "=" && code[i + 1] === "=") {
+        type = TokenType.COMMA;
+        value = "==";
+        i++;
+      } else if (char === "!" && code[i + 1] === "=") {
+        type = TokenType.COMMA;
+        value = "!=";
+        i++;
+      } else if (char === "<" && code[i + 1] === "=") {
+        type = TokenType.COMMA;
+        value = "<=";
+        i++;
+      } else if (char === ">" && code[i + 1] === "=") {
+        type = TokenType.COMMA;
+        value = ">=";
+        i++;
       } else if (char === "=" && code[i + 1] === ">") {
         type = TokenType.ARROW;
         value = "=>";
@@ -184,6 +199,31 @@ export class V5Parser {
         type = TokenType.ARROW;
         value = "->";
         i++;
+      }
+      // 단일 minus 처리 (else if가 아니라 그냥 처리)
+      else if (char === "-") {
+        type = TokenType.COMMA;
+        value = "-";
+      }
+      // 1문자 연산자 및 구분자
+      else if (char === "(") type = TokenType.LPAREN;
+      else if (char === ")") type = TokenType.RPAREN;
+      else if (char === "{") type = TokenType.LBRACE;
+      else if (char === "}") type = TokenType.RBRACE;
+      else if (char === "[") type = TokenType.LBRACKET;
+      else if (char === "]") type = TokenType.RBRACKET;
+      else if (char === ",") type = TokenType.COMMA;
+      else if (char === ";") type = TokenType.COMMA;  // semicolon 무시 (연산자로 처리)
+      else if (char === ":") type = TokenType.COLON;
+      else if (char === "+") type = TokenType.COMMA;  // 임시: 토큰으로 생성 (value에 저장)
+      else if (char === "*") type = TokenType.COMMA;
+      else if (char === "/") type = TokenType.COMMA;
+      else if (char === "%") type = TokenType.COMMA;
+      else if (char === "<") type = TokenType.COMMA;
+      else if (char === ">") type = TokenType.COMMA;
+      else if (char === "!") type = TokenType.COMMA;
+      else if (char === "=" && code[i + 1] !== ">") {
+        type = TokenType.EQUALS;
       }
 
       if (type) {

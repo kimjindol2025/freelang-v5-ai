@@ -130,24 +130,40 @@ export class V4Interpreter {
     const fn = (...args: any[]) => {
       // 함수 로컬 변수 저장
       const savedVars = new Map(this.context.variables);
+      const savedReturnValue = this.context.returnValue;
+
+      // returnValue 초기화 (새 함수 호출)
+      this.context.returnValue = undefined;
 
       // 파라미터를 변수로 등록
       params.forEach((param: any, idx: number) => {
         const paramName = typeof param === "string" ? param : param.name;
-        this.context.variables.set(paramName, args[idx]);
+        const paramValue = args[idx];
+        if (name === "fib") {
+          console.log(`[PARAM] ${name}: ${paramName} = ${paramValue}`);
+        }
+        this.context.variables.set(paramName, paramValue);
       });
 
       // 함수 로직 실행
       let result: any;
       try {
+        if (name === "main") {
+          console.log(`🔧 main() 실행: logic = "${logic.substring(0, 50)}..."`);
+        }
         result = this.executeLogic(logic, args);
+        if (name === "main") {
+          console.log(`✅ main() 결과: ${result}`);
+        }
       } catch (e) {
         // 에러 처리
+        console.error(`❌ ${name}() 에러:`, (e as Error).message);
         result = null;
       }
 
-      // 변수 복원
+      // 변수 복원 및 returnValue 복원
       this.context.variables = savedVars;
+      this.context.returnValue = savedReturnValue;
 
       return result;
     };
@@ -170,20 +186,224 @@ export class V4Interpreter {
   }
 
   /**
-   * 함수 로직 실행
+   * 함수 로직 실행 (if 문 포함한 제어흐름 지원)
    */
   public executeLogic(logic: string, args: any[]): any {
-    // 간단한 로직 파싱 및 실행
-    const trimmed = logic.trim();
+    return this.executeBlock(logic);
+  }
 
-    // return 문 처리
-    if (trimmed.startsWith("return ")) {
-      const expr = trimmed.substring(7).replace(/[;]$/, "");
-      return this.evaluateExpression(expr, args);
+  /**
+   * 블록 실행 (여러 문장, if/while 포함)
+   */
+  private executeBlock(block: string): any {
+    let pos = 0;
+    let result: any;
+
+    while (pos < block.length) {
+      // 공백 건너뛰기
+      while (pos < block.length && /\s/.test(block[pos])) pos++;
+      if (pos >= block.length) break;
+
+      // if 문 감지
+      if (block.substring(pos).startsWith("if")) {
+        const ifResult = this.parseAndExecuteIf(block, pos);
+        result = ifResult.result;
+        pos = ifResult.nextPos;
+        if (this.context.returnValue !== undefined) return result;
+        continue;
+      }
+
+      // return 문 감지
+      if (block.substring(pos).startsWith("return")) {
+        const semiPos = block.indexOf(";", pos);
+        const returnExpr = block.substring(pos + 6, semiPos >= 0 ? semiPos : undefined).trim();
+        result = this.evaluateExpression(returnExpr);
+        this.context.returnValue = result;
+        return result;
+      }
+
+      // var 선언 감지
+      if (block.substring(pos).startsWith("var")) {
+        const semiPos = block.indexOf(";", pos);
+        if (semiPos >= 0) {
+          const varStmt = block.substring(pos, semiPos).trim();
+          const eqPos = varStmt.indexOf("=");
+          if (eqPos > 0) {
+            const varName = varStmt.substring(3, eqPos).trim();
+            const varValue = this.evaluateExpression(varStmt.substring(eqPos + 1).trim());
+            this.context.variables.set(varName, varValue);
+            result = varValue;
+          }
+          pos = semiPos + 1;
+          continue;
+        }
+      }
+
+      // 일반 문장 (함수 호출 등)
+      const semiPos = block.indexOf(";", pos);
+      if (semiPos >= 0) {
+        const stmt = block.substring(pos, semiPos).trim();
+        if (stmt) {
+          try {
+            result = this.evaluateExpression(stmt);
+          } catch (e) {
+            console.error(`⚠️  실행 실패: ${stmt}`);
+          }
+        }
+        pos = semiPos + 1;
+      } else {
+        break;
+      }
     }
 
-    // 직접 식 평가
-    return this.evaluateExpression(trimmed, args);
+    return result;
+  }
+
+  /**
+   * if 문 파싱 및 실행
+   */
+  private parseAndExecuteIf(block: string, startPos: number): { result: any; nextPos: number } {
+    let pos = startPos + 2; // "if" 건너뛰기
+
+    // 공백 건너뛰고 (
+    while (pos < block.length && (block[pos] === " " || block[pos] === "\t")) pos++;
+    if (block[pos] !== "(") return { result: undefined, nextPos: pos };
+    pos++; // ( 건너뛰기
+
+    // 조건 추출 (괄호 짝 찾기)
+    let depth = 1;
+    let condStart = pos;
+    while (pos < block.length && depth > 0) {
+      if (block[pos] === "(") depth++;
+      else if (block[pos] === ")") depth--;
+      if (depth > 0) pos++;
+    }
+    const condition = block.substring(condStart, pos).trim();
+    pos++; // ) 건너뛰기
+
+    // 공백 건너뛰고 {
+    while (pos < block.length && (block[pos] === " " || block[pos] === "\t" || block[pos] === "\n")) pos++;
+    if (block[pos] !== "{") {
+      // 중괄호 없이 단일 문장 (if (cond) return x;)
+      const semiPos = block.indexOf(";", pos);
+      const thenStmt = block.substring(pos, semiPos >= 0 ? semiPos : undefined).trim();
+      const condResult = this.evaluateExpression(condition);
+      let result: any;
+      if (condResult) {
+        result = this.executeBlock(thenStmt + ";");
+      }
+      return { result, nextPos: semiPos >= 0 ? semiPos + 1 : block.length };
+    }
+
+    pos++; // { 건너뛰기
+
+    // then 블록 추출 (중괄호 짝 찾기)
+    depth = 1;
+    let thenStart = pos;
+    while (pos < block.length && depth > 0) {
+      if (block[pos] === "{") depth++;
+      else if (block[pos] === "}") depth--;
+      if (depth > 0) pos++;
+    }
+    const thenBlock = block.substring(thenStart, pos).trim();
+    pos++; // } 건너뛰기
+
+    // else 블록 확인
+    let elseBlock = "";
+    let nextPos = pos;
+    while (pos < block.length && (block[pos] === " " || block[pos] === "\t" || block[pos] === "\n")) pos++;
+    if (block.substring(pos).startsWith("else")) {
+      pos += 4; // "else" 건너뛰기
+      while (pos < block.length && (block[pos] === " " || block[pos] === "\t" || block[pos] === "\n")) pos++;
+      if (block[pos] === "{") {
+        pos++; // { 건너뛰기
+        depth = 1;
+        let elseStart = pos;
+        while (pos < block.length && depth > 0) {
+          if (block[pos] === "{") depth++;
+          else if (block[pos] === "}") depth--;
+          if (depth > 0) pos++;
+        }
+        elseBlock = block.substring(elseStart, pos).trim();
+        pos++; // } 건너뛰기
+        nextPos = pos;
+      }
+    }
+
+    // 조건 평가 및 실행
+    const condResult = this.evaluateExpression(condition);
+    let result: any;
+    if (condResult) {
+      result = this.executeBlock(thenBlock);
+    } else if (elseBlock) {
+      result = this.executeBlock(elseBlock);
+    }
+
+    return { result, nextPos };
+  }
+
+  /**
+   * 괄호 균형을 맞춰서 함수 호출 감지
+   * 예: "fib(n-1)" → {funcName: "fib", argsStr: "n-1", isSimpleCall: true}
+   * 예: "fib(n-1) + fib(n-2)" → null (단순 함수 호출이 아님)
+   */
+  private extractSimpleFunctionCall(str: string): { funcName: string; argsStr: string } | null {
+    const match = str.match(/^(\w+)\(/);
+    if (!match) return null;
+
+    const funcName = match[1];
+    const startIdx = str.indexOf("(");
+
+    let depth = 1;
+    let endIdx = startIdx + 1;
+
+    while (endIdx < str.length && depth > 0) {
+      if (str[endIdx] === "(") depth++;
+      else if (str[endIdx] === ")") depth--;
+      if (depth === 0) break;
+      endIdx++;
+    }
+
+    if (depth !== 0) return null; // 괄호 균형 안 맞음
+
+    // 괄호가 문자열 끝에서 닫혀야만 "단순 함수 호출"
+    if (endIdx !== str.length - 1) return null;
+
+    const argsStr = str.substring(startIdx + 1, endIdx);
+    return { funcName, argsStr };
+  }
+
+  /**
+   * 괄호를 고려한 인자 분할
+   */
+  private splitArguments(argsStr: string): string[] {
+    const args: string[] = [];
+    let current = "";
+    let depth = 0;
+
+    for (let i = 0; i < argsStr.length; i++) {
+      const char = argsStr[i];
+
+      if (char === "(" || char === "[" || char === "{") {
+        depth++;
+        current += char;
+      } else if (char === ")" || char === "]" || char === "}") {
+        depth--;
+        current += char;
+      } else if (char === "," && depth === 0) {
+        // top-level comma: argument separator
+        args.push(current);
+        current = "";
+      } else {
+        current += char;
+      }
+    }
+
+    if (current) {
+      args.push(current);
+    }
+
+    return args;
   }
 
   /**
@@ -192,7 +412,9 @@ export class V4Interpreter {
   private evaluateExpression(expr: string, args?: any[]): any {
     if (!expr) return null;
 
-    const trimmed = expr.trim().replace(/;$/, "");
+    // 불필요한 공백 제거 (함수 호출에서 "print ( x )" → "print(x)")
+    let trimmed = expr.trim().replace(/;$/, "");
+    trimmed = trimmed.replace(/\s*\(\s*/g, "(").replace(/\s*\)\s*/g, ")").replace(/\s*,\s*/g, ",");
 
     // 1. 리터럴 값
     if (trimmed === "null") return null;
@@ -224,36 +446,92 @@ export class V4Interpreter {
     }
 
     // 4. 함수 호출 (func(...))
-    const funcCallMatch = trimmed.match(/^(\w+)\((.*)\)$/);
-    if (funcCallMatch) {
-      const funcName = funcCallMatch[1];
-      const argsStr = funcCallMatch[2];
+    const funcCall = this.extractSimpleFunctionCall(trimmed);
+    if (funcCall) {
+      const funcName = funcCall.funcName;
+      const argsStr = funcCall.argsStr;
       const fn = this.context.functions.get(funcName);
 
       if (fn) {
-        const callArgs = argsStr
-          ? argsStr.split(",").map((arg) => this.evaluateExpression(arg.trim(), args))
-          : [];
+        // bracket-aware argument split
+        if (funcName === "fib") {
+          console.log(`[ARGS] argsStr="${argsStr}"`);
+        }
+        const splitArgs = argsStr ? this.splitArguments(argsStr) : [];
+        if (funcName === "fib") {
+          console.log(`[SPLIT] ${splitArgs.map(s => `"${s}"`).join(", ")}`);
+        }
+        const callArgs = splitArgs.map((arg) => {
+          const trimmed = arg.trim();
+          const evaluated = this.evaluateExpression(trimmed, args);
+          if (funcName === "fib") {
+            console.log(`  [EVAL] "${trimmed}" → ${evaluated}`);
+          }
+          return evaluated;
+        });
+        if (funcName === "fib") {
+          console.log(`[CALL] ${funcName}(${callArgs.join(", ")})`);
+        }
         return fn(...callArgs);
       }
     }
 
-    // 5. 이항 연산 (a + b, a - b 등)
-    const binaryMatch = trimmed.match(/^(.+?)\s*([\+\-\*\/])\s*(.+)$/);
+    // 5. 이항 연산 (산술, 비교, 논리)
+    // 논리 && (높은 우선순위)
+    let binaryMatch = trimmed.match(/^(.+?)\s*(&&)\s*(.+)$/);
     if (binaryMatch) {
       const left = this.evaluateExpression(binaryMatch[1], args);
-      const op = binaryMatch[2];
+      if (!left) return false;  // 단락 평가
       const right = this.evaluateExpression(binaryMatch[3], args);
+      return left && right;
+    }
 
-      switch (op) {
-        case "+":
-          return left + right;
-        case "-":
-          return left - right;
-        case "*":
-          return left * right;
-        case "/":
-          return left / right;
+    // 논리 ||
+    binaryMatch = trimmed.match(/^(.+?)\s*(\|\|)\s*(.+)$/);
+    if (binaryMatch) {
+      const left = this.evaluateExpression(binaryMatch[1], args);
+      if (left) return true;  // 단락 평가
+      const right = this.evaluateExpression(binaryMatch[3], args);
+      return left || right;
+    }
+
+    // 산술 & 비교 연산자 - 순서대로 시도
+    const operators = ["<=", ">=", "==", "!=", "<", ">", "%", "+", "-", "*", "/"];
+    for (const opStr of operators) {
+      const escapedOp = opStr.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const regex1 = new RegExp(`^(.+?)\\s*${escapedOp}\\s*(.+)$`);
+      const regex2 = new RegExp(`^(.+?)${escapedOp}(.+)$`);
+
+      binaryMatch = trimmed.match(regex1) || trimmed.match(regex2);
+      if (binaryMatch) {
+        const left = this.evaluateExpression(binaryMatch[1], args);
+        const op = opStr;
+        const right = this.evaluateExpression(binaryMatch[2], args);
+
+        switch (op) {
+          case "+":
+            return left + right;
+          case "-":
+            return left - right;
+          case "*":
+            return left * right;
+          case "/":
+            return left / right;
+          case "%":
+            return left % right;
+          case "<":
+            return left < right;
+          case ">":
+            return left > right;
+          case "<=":
+            return left <= right;
+          case ">=":
+            return left >= right;
+          case "==":
+            return left == right;
+          case "!=":
+            return left != right;
+        }
       }
     }
 

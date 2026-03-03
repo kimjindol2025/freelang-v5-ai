@@ -14,3 +14,12 @@ fn factorial(n: number) -> number {
 fn isEven(n: number) -> boolean {
   return n % 2 == 0;
 }
+
+fn main() -> void {
+  var f10 = fib(10);
+  var fact5 = factorial(5);
+  var even4 = isEven(4);
+  print("fib(10) =", f10);
+  print("factorial(5) =", fact5);
+  print("isEven(4) =", even4);
+}

@@ -39,6 +39,14 @@ export class FreeLangRuntime {
       console.log("⚡ Step 2: v4 해석 및 실행\n");
       const result = this.interpreter.execute(spec);
 
+      // 3️⃣ main() 함수 자동 실행
+      if ((this.interpreter as any).context?.functions.has("main")) {
+        console.log("\n🎬 Step 3: main() 함수 자동 실행\n");
+        const mainResult = this.interpreter.call("main");
+        console.log("\n✨ 실행 완료!\n");
+        return mainResult;
+      }
+
       console.log("\n✨ 실행 완료!\n");
       return result;
     } catch (error) {
