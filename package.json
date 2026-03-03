@@ -1,0 +1,96 @@
+{
+  "name": "@freelang/v5",
+  "version": "5.0.0-alpha",
+  "description": "FreeLang v5 AI-First Language - Intent-Based Programming (Human 10% + AI 90%)",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "npm run test:week1 && npm run test:week2 && npm run test:week3 && npm run test:week4",
+    "test:week1": "ts-node Week1/v5-intent-test.ts",
+    "test:week2": "jest --testPathPattern='Week2'",
+    "test:week3": "jest --testPathPattern='Week3'",
+    "test:week4": "jest --testPathPattern='Week4'",
+    "generate:intent": "ts-node scripts/generate-from-intent.ts",
+    "generate:typescript": "ts-node scripts/generate-typescript.ts",
+    "generate:c": "ts-node scripts/generate-c.ts",
+    "generate:python": "ts-node scripts/generate-python.ts",
+    "generate:go": "ts-node scripts/generate-go.ts",
+    "generate:rust": "ts-node scripts/generate-rust.ts",
+    "dev": "ts-node-dev --respawn src/index.ts",
+    "lint": "eslint src --ext .ts",
+    "format": "prettier --write 'src/**/*.ts'",
+    "clean": "rm -rf dist",
+    "prepare": "npm run build"
+  },
+  "keywords": [
+    "freelang-v5",
+    "ai-first",
+    "intent-based",
+    "language-independent",
+    "code-generation",
+    "multi-language",
+    "claude-ai",
+    "kimnexus"
+  ],
+  "author": "Claude AI (KimNexus)",
+  "license": "MIT",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.12.0",
+    "typescript": "^5.3.3"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.8",
+    "@types/node": "^20.10.0",
+    "@typescript-eslint/eslint-plugin": "^6.13.0",
+    "@typescript-eslint/parser": "^6.13.0",
+    "eslint": "^8.55.0",
+    "jest": "^29.7.0",
+    "prettier": "^3.1.0",
+    "ts-jest": "^29.1.1",
+    "ts-node": "^10.9.2",
+    "ts-node-dev": "^2.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://gogs.dclub.kr/kim/freelang-v5-ai.git"
+  },
+  "bugs": {
+    "url": "https://gogs.dclub.kr/kim/freelang-v5-ai/issues"
+  },
+  "homepage": "https://gogs.dclub.kr/kim/freelang-v5-ai",
+  "kpm": {
+    "category": "language-runtime",
+    "subcategory": "ai-first-language",
+    "official": true,
+    "tags": [
+      "freelang-v5",
+      "ai-first",
+      "intent-based",
+      "language-independent",
+      "kimnexus",
+      "next-generation"
+    ],
+    "entry": "dist/index.js",
+    "cli": true,
+    "version": "5.0.0-alpha",
+    "dependencies": [],
+    "info": {
+      "official_language": true,
+      "ai_first": true,
+      "generation": "v5 (AI-First)",
+      "human_percentage": 10,
+      "ai_percentage": 90,
+      "support_matrix": {
+        "typescript": true,
+        "c": true,
+        "python": true,
+        "go": true,
+        "rust": true
+      }
+    }
+  }
+}
