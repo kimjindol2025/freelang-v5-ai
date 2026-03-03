@@ -352,9 +352,6 @@ export class V4Interpreter {
    * 블록 실행 (여러 문장, if/while 포함)
    */
   private executeBlock(block: string, args: any[] = []): any {
-    if (block.includes("print") || block.includes("r1") || block.includes("r2")) {
-    }
-
     // "this . field" → "this.field" 같은 공백 정규화
     block = block.replace(/\s*\.\s*/g, ".");
 
@@ -678,7 +675,6 @@ export class V4Interpreter {
       if (depth > 0) pos++;
     }
     const bodyBlock = block.substring(bodyStart, pos).trim();
-    const closingBracePos = pos; // } 위치 저장
     pos++; // } 다음
 
     // while 루프 실행

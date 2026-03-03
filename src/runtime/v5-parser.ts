@@ -367,13 +367,20 @@ export class V5Parser {
       }
     }
 
-    // 함수 본문 파싱
+    // 함수 본문 파싱 (중괄호 깊이 추적)
     if (this.peek().type !== TokenType.LBRACE) {
       throw new Error(`함수 본문이 필요합니다 (받음: ${this.peek().value}) at line ${this.peek().line}`);
     }
     this.consume(TokenType.LBRACE); // {
     let logic = "";
-    while (this.peek().type !== TokenType.RBRACE && !this.isAtEnd()) {
+    let braceDepth = 1; // { 를 이미 consume했으므로 깊이 1
+    while (this.peek().type !== TokenType.EOF && braceDepth > 0) {
+      if (this.peek().type === TokenType.LBRACE) {
+        braceDepth++;
+      } else if (this.peek().type === TokenType.RBRACE) {
+        braceDepth--;
+        if (braceDepth === 0) break; // 마지막 } 는 consume하지 않음
+      }
       logic += this.peek().value + " ";
       this.advance();
     }
