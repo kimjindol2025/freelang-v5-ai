@@ -16,6 +16,7 @@ import * as path from "path";
 import { generateCommand } from "./commands/generate";
 import { optimizeCommand } from "./commands/optimize";
 import { validateCommand } from "./commands/validate";
+import { runCommand } from "./commands/run";
 
 const VERSION = "5.0.0-alpha";
 
@@ -61,6 +62,10 @@ async function main() {
         await validateCommand(args.slice(1));
         break;
 
+      case "run":
+        await runCommand(args.slice(1));
+        break;
+
       // Direct intent (no explicit 'generate' command)
       default:
         // Treat as intent if it starts with a quote or doesn't match a command
@@ -99,9 +104,10 @@ function showHelp(): void {
     freelang "사용자 인증 시스템 구축해"
 
   Explicit Commands:
-    freelang generate "당신의 의도"
-    freelang optimize <파일경로>
-    freelang validate <파일경로>
+    freelang generate "당신의 의도"      (코드 생성)
+    freelang run "당신의 의도"           (코드 생성 후 바로 실행)
+    freelang optimize <파일경로>        (최적화)
+    freelang validate <파일경로>        (보안 검증)
 
   Information:
     freelang --version
