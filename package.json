@@ -10,7 +10,7 @@
     "test:week1": "ts-node Week1/v5-intent-test.ts",
     "test:week2": "ts-node Week2/week2-integration-test.ts",
     "test:week3": "ts-node Week3/week3-codegen-test.ts",
-    "test:week4": "jest --testPathPattern='Week4'",
+    "test:week4": "ts-node Week4/week4-optimization-test.ts",
     "generate:intent": "ts-node scripts/generate-from-intent.ts",
     "generate:typescript": "ts-node scripts/generate-typescript.ts",
     "generate:c": "ts-node scripts/generate-c.ts",
